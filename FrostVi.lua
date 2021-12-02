@@ -146,6 +146,7 @@ function Vi.LoadMenu()
 			Menu.Indent(function()
 				Menu.ColorPicker("Drawing.RColor", "Color", 0xFF0000FF)
 			end)
+			Menu.Checkbox("Drawing.AlwaysDraw", "Always show Drawings", false)
 		end)
 	end)
 end
@@ -363,15 +364,15 @@ function Vi.OnPostAttack()
 end
 
 function Vi.OnDraw()
-    if spells.Q:IsReady() and Menu.Get("Drawing.Q") then
+    if (Menu.Get("Drawing.AlwaysDraw") or spells.Q:IsReady()) and Menu.Get("Drawing.Q") then
         Renderer.DrawCircle3D(Player.Position, spells.Q.MaxRange, 30, 1, Menu.Get("Drawing.QColor"))
     end
 
-    if spells.E:IsReady() and Menu.Get("Drawing.E") then
+    if (Menu.Get("Drawing.AlwaysDraw") or spells.E:IsReady()) and Menu.Get("Drawing.E") then
        Renderer.DrawCircle3D(Player.Position, spells.E.Range, 30, 1, Menu.Get("Drawing.EColor"))
     end	
 
-    if spells.R:IsReady() and Menu.Get("Drawing.R") then
+    if (Menu.Get("Drawing.AlwaysDraw") or spells.R:IsReady()) and Menu.Get("Drawing.R") then
         Renderer.DrawCircle3D(Player.Position, spells.R.Range, 30, 1, Menu.Get("Drawing.RColor"))
     end	
 	
