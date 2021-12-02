@@ -33,7 +33,8 @@ local spells = {
         Slot            = Enums.SpellSlots.W
     }),
     E = Spell.Active({
-        Slot            = Enums.SpellSlots.E
+        Slot            = Enums.SpellSlots.E,
+		Range = 275
     }),
     R = Spell.Targeted({
         Slot            = Enums.SpellSlots.R,
@@ -97,7 +98,7 @@ end
 
 function Vi.LoadMenu()
 	Menu.RegisterMenu("FrostVi", "Frost Vi", function ()
-		Menu.ColumnLayout("cols", "cols", 4, true, function()
+		Menu.ColumnLayout("cols", "cols", 5, true, function()
             Menu.ColoredText("Combo", 0x9400D3, true)
             Menu.Checkbox("Combo.UseQ", "Use Q", true) 
 			Menu.Dropdown("Combo.QMode", "Q Mode", 0, {"Logic", "MaxRange"})
@@ -126,11 +127,25 @@ function Vi.LoadMenu()
 			Menu.NextColumn()
 			
 			Menu.ColoredText("Misc", 0x9400D3, true)
-            Menu.Checkbox("Drawing.Q", "Draw Q", true)
-			Menu.Checkbox("Drawing.R", "Draw R", true)
             Menu.Checkbox("Misc.AntiGapCloser", "Use AntiGapCloser", true)
             Menu.Checkbox("Misc.Interrupt", "Use Interrupt", true)	
 			Menu.Keybind("Misc.SkillsUT", "Use Skills Under Turret", string.byte("T"), true, false, true)
+			
+			Menu.NextColumn()
+			
+			Menu.ColoredText("Drawing", 0x9400D3, true)
+            Menu.Checkbox("Drawing.Q", "Draw Q", true)
+			Menu.Indent(function()
+				Menu.ColorPicker("Drawing.QColor", "Color", 0xFF0000FF)
+			end)
+            Menu.Checkbox("Drawing.E", "Draw E", true)
+			Menu.Indent(function()
+				Menu.ColorPicker("Drawing.EColor", "Color", 0xFF0000FF)
+			end)
+			Menu.Checkbox("Drawing.R", "Draw R", true)
+			Menu.Indent(function()
+				Menu.ColorPicker("Drawing.RColor", "Color", 0xFF0000FF)
+			end)
 		end)
 	end)
 end
@@ -349,11 +364,15 @@ end
 
 function Vi.OnDraw()
     if Menu.Get("Drawing.Q") then
-        Renderer.DrawCircle3D(Player.Position, spells.Q.MaxRange, 30, 1, 0x8400D7)
+        Renderer.DrawCircle3D(Player.Position, spells.Q.MaxRange, 30, 1, Menu.Get("Drawing.QColor"))
     end
 
+    if Menu.Get("Drawing.E") then
+       Renderer.DrawCircle3D(Player.Position, spells.E.Range, 30, 1, Menu.Get("Drawing.EColor"))
+    end	
+
     if Menu.Get("Drawing.R") then
-        Renderer.DrawCircle3D(Player.Position, spells.R.Range, 30, 1, 0x8400D7)
+        Renderer.DrawCircle3D(Player.Position, spells.R.Range, 30, 1, Menu.Get("Drawing.RColor"))
     end	
 	
 	if not Menu.Get("Misc.SkillsUT") then
