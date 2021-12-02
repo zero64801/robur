@@ -16,6 +16,7 @@ local Input = SDK.Input
 local Menu = Libs.NewMenu
 local Orbwalker = Libs.Orbwalker
 local Spell = Libs.Spell
+local DmgLib = Libs.DamageLib
 
 local spells = {
     Q = Spell.Chargeable({
@@ -46,7 +47,7 @@ local spells = {
     }
 }
 
---//Functions-//--
+--//Library-//--
 local summSlots = {Enums.SpellSlots.Summoner1, Enums.SpellSlots.Summoner2}
 function GetSpellSlot(Name)
     for _, slot in ipairs(summSlots) do
@@ -68,6 +69,22 @@ function GetMinions(team, range)
 	return Table
 end
 
+function IsPosUnderTurret(pos)
+    local enemyTurrets = ObjManager.GetNearby("enemy", "turrets")
+
+    local boundingRadius = Player.BoundingRadius
+
+    for _, obj in ipairs(enemyTurrets) do
+        local turret = obj.AsTurret
+
+        if turret and turret.IsValid and not turret.IsDead and pos:DistanceSqr(turret) <= math.pow(900 + boundingRadius, 2) then
+            return true
+        end
+    end
+
+    return false
+end
+
 function Vi.Init()
 	Vi.LoadMenu()
 	
@@ -83,8 +100,11 @@ function Vi.LoadMenu()
 		Menu.ColumnLayout("cols", "cols", 4, true, function()
             Menu.ColoredText("Combo", 0x9400D3, true)
             Menu.Checkbox("Combo.UseQ", "Use Q", true) 
+			Menu.Dropdown("Combo.QMode", "Q Mode", 0, {"Logic", "MaxRange"})
+			Menu.Slider("Chance.Q","HitChance [Q]", 0.75, 0, 1, 0.05)
             Menu.Checkbox("Combo.UseE", "Use E", true)  
             Menu.Checkbox("Combo.UseR", "Use R", true)
+			Menu.Dropdown("Combo.RMode", "R Mode", 0, {"Killable", "Always"})
 			--Menu.Keybind("Combo.Flash", "Flash Q", string.byte("G"), false, false, true)
 			
 			Menu.NextColumn()
@@ -106,10 +126,11 @@ function Vi.LoadMenu()
 			Menu.NextColumn()
 			
 			Menu.ColoredText("Misc", 0x9400D3, true)
-            Menu.Checkbox("Misc.DrawQ", "Draw Q", true)
-			Menu.Checkbox("Clear.DrawR", "Draw R", true)
-            Menu.Checkbox("JClear.AntiGapCloser", "Use AntiGapCloser", true)
-            Menu.Checkbox("JClear.Interrupt", "Use Interrupt", true)			
+            Menu.Checkbox("Drawing.Q", "Draw Q", true)
+			Menu.Checkbox("Drawing.R", "Draw R", true)
+            Menu.Checkbox("Misc.AntiGapCloser", "Use AntiGapCloser", true)
+            Menu.Checkbox("Misc.Interrupt", "Use Interrupt", true)	
+			Menu.Keybind("Misc.SkillsUT", "Use Skills Under Turret", string.byte("T"), true, false, true)
 		end)
 	end)
 end
@@ -118,6 +139,20 @@ function Vi.EnemiesNearby()
     if Menu.Get("Clear.enemiesAround") and TS:GetTarget(1800) then
         return TS:GetTarget(1800)
     end
+end
+
+function Vi.ComboDamage(Target)
+	local Damage = 0
+	if spells.Q:IsReady() then
+		Damage = Damage + spells.Q:GetDamage(Target)
+	end
+	if spells.E:IsReady() then
+		Damage = Damage + ((spells.E:GetDamage(Target) * spells.E:GetCurrentAmmo()) + DmgLib:GetAutoAttackDamage(Player, Target, true))
+	end
+	if spells.R:IsReady() then
+		Damage = Damage + spells.R:GetDamage(Target)
+	end
+	return Damage
 end
 
 function Vi.flashQ()
@@ -180,15 +215,13 @@ end
 
 function Vi.Combo()
 	local Target = TS:GetTarget(spells.Q.MaxRange)
-	if TS:IsValidTarget(Target) then
+	if TS:IsValidTarget(Target) and ((Menu.Get("Misc.SkillsUT") or Orbwalker.HasTurretTargetting(Player) and IsPosUnderTurret(Player.ServerPos)) or not IsPosUnderTurret(Target.ServerPos) ) then
 		if Menu.Get("Combo.UseQ", true) and spells.Q:IsReady() then
 			if spells.Q.IsCharging then
 				local Prediction = spells.Q:GetPrediction(Target)
-				if Prediction and Prediction.HitChanceEnum >= Enums.HitChance.Medium then
-					if spells.Q:GetRange() == spells.Q.MaxRange then
-						if spells.Q:Release(Prediction.CastPosition) then
-							return
-						end
+				if spells.Q:GetRange() == spells.Q.MaxRange or Menu.Get("Combo.QMode") == 0 and Orbwalker.GetTrueAutoAttackRange(Player) >= Player:Distance(Target) then
+					if Prediction and spells.Q:ReleaseOnHitChance(Prediction.CastPosition, Menu.Get("Chance.Q")) then
+						return
 					end
 				end
 			else
@@ -201,7 +234,16 @@ function Vi.Combo()
 			table.sort(RTargets, function(a, b)
 				return a.Health < b.Health
 			end)
-			spells.R:Cast(RTargets[1])
+			if Menu.Get("Combo.RMode") == 0 then
+				for _,enemy in ipairs(RTargets) do
+					if Vi.ComboDamage(enemy) > enemy.Health then
+						spells.R:Cast(enemy)
+						break
+					end
+				end
+			else
+				spells.R:Cast(RTargets[1])
+			end
 		end
 	end
 end
@@ -305,4 +347,25 @@ function Vi.OnPostAttack()
 	end
 end
 
+function Vi.OnDraw()
+    if Menu.Get("Drawing.Q") then
+        Renderer.DrawCircle3D(Player.Position, spells.Q.MaxRange, 30, 1, 0x8400D7)
+    end
+
+    if Menu.Get("Drawing.R") then
+        Renderer.DrawCircle3D(Player.Position, spells.R.Range, 30, 1, 0x8400D7)
+    end	
+	
+	if not Menu.Get("Misc.SkillsUT") then
+		Renderer.DrawTextOnPlayer("Q/R Under Turret [OFF]", 0xFF0000FF)
+	else
+		Renderer.DrawTextOnPlayer("Q/R Under Turret [ON]", 0x7FFFD4)
+	end
+end
+
+function Vi.OnDrawDamage(Target, dmgList)
+    table.insert(dmgList, Vi.ComboDamage(Target))
+end
+
 Vi.Init()
+--//--
