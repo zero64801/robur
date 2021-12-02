@@ -1,7 +1,7 @@
 if Player.CharName ~= "Vi" then return end
 
 --//Variables-//--
-local Vi = {}
+local Vi, Utils = {}, {}
 
 local SDK = _G.CoreEx
 local TS = _G.Libs.TargetSelector()
@@ -49,16 +49,16 @@ local spells = {
 
 --//Library-//--
 local summSlots = {Enums.SpellSlots.Summoner1, Enums.SpellSlots.Summoner2}
-function GetSpellSlot(Name)
+function Utils.GetSpellSlot(Name)
     for _, slot in ipairs(summSlots) do
         if Player:GetSpell(slot).Name == Name then
             return slot
         end
     end	
 end
-spells.Flash.Slot = GetSpellSlot("SummonerFlash")
+spells.Flash.Slot = Utils.GetSpellSlot("SummonerFlash")
 
-function GetMinions(team, range)
+function Utils.GetMinions(team, range)
 	local Table = {}
 	for _,unit in ipairs(ObjManager.GetNearby(team, "minions")) do
 		local minion = unit.AsMinion
@@ -69,7 +69,7 @@ function GetMinions(team, range)
 	return Table
 end
 
-function IsPosUnderTurret(pos)
+function Utils.IsPosUnderTurret(pos)
     local enemyTurrets = ObjManager.GetNearby("enemy", "turrets")
 
     local boundingRadius = Player.BoundingRadius
@@ -215,7 +215,7 @@ end
 
 function Vi.Combo()
 	local Target = TS:GetTarget(spells.Q.MaxRange)
-	if TS:IsValidTarget(Target) and ((Menu.Get("Misc.SkillsUT") or Orbwalker.HasTurretTargetting(Player) and IsPosUnderTurret(Player.ServerPos)) or not IsPosUnderTurret(Target.ServerPos) ) then
+	if TS:IsValidTarget(Target) and ((Menu.Get("Misc.SkillsUT") or Orbwalker.HasTurretTargetting(Player) and Utils.IsPosUnderTurret(Player.ServerPos)) or not Utils.IsPosUnderTurret(Target.ServerPos) ) then
 		if Menu.Get("Combo.UseQ", true) and spells.Q:IsReady() then
 			if spells.Q.IsCharging then
 				local Prediction = spells.Q:GetPrediction(Target)
@@ -273,7 +273,7 @@ end
 function Vi.LaneClear()
 	if Vi.EnemiesNearby() then return end
 	if Player.ManaPercent * 100 > Menu.Get("Clear.ManaSlider") then
-		local Minions = GetMinions("enemy", spells.Q.MaxRange)
+		local Minions = Utils.GetMinions("enemy", spells.Q.MaxRange)
 		if Minions and #Minions > 1 then
 			if Menu.Get("Clear.UseQ") and spells.Q:IsReady() then
 				local minionsPositions = {}
@@ -298,7 +298,7 @@ end
 function Vi.JungleClear()
     if Vi.EnemiesNearby() then return end
 	if Player.ManaPercent * 100 > Menu.Get("Clear.ManaSlider") then
-		local Minions = GetMinions("neutral", spells.E.Range)
+		local Minions = Utils.GetMinions("neutral", spells.E.Range)
 		if Minions and #Minions > 0 then
 			if Menu.Get("Clear.UseQ") and spells.Q:IsReady() then
 				local minionsPositions = {}
@@ -339,7 +339,7 @@ function Vi.OnPostAttack()
 			Orbwalker:ResetAttack()
 		end
 	elseif Orbwalker.GetMode() == "Waveclear" then
-		if Vi.EnemiesNearby() then return end
+		if Vi.EnemiesNearby() or Player.ManaPercent * 100 < Menu.Get("Clear.ManaSlider") then return end
 		if (Menu.Get("Clear.UseE", true) or Menu.Get("JClear.UseE", true)) and spells.E:IsReady() then
 			spells.E:Cast()
 			Orbwalker:ResetAttack()
@@ -368,4 +368,3 @@ function Vi.OnDrawDamage(Target, dmgList)
 end
 
 Vi.Init()
---//--
