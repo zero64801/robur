@@ -8,18 +8,14 @@ local TS = _G.Libs.TargetSelector()
 
 local ObjManager = SDK.ObjectManager
 local EventManager = SDK.EventManager
-local Geometry = SDK.Geometry
 local Renderer = SDK.Renderer
 local Enums = SDK.Enums
 local Game = SDK.Game
-local Input = SDK.Input
-local Evade = SDK.EvadeAPI
 
 local Menu = Libs.NewMenu
 local Orbwalker = Libs.Orbwalker
 local HPPred = Libs.HealthPred
 local Spell = Libs.Spell
-local DmgLib = Libs.DamageLib
 
 local adcTable = { 
 ["Twitch"] = true, 
@@ -338,7 +334,6 @@ function Zilean.OnGapclose(source, dashInstance)
 	end
 end
 
-local aaaaaaaaaaaaammm = 0
 function Zilean.Combo()
 	local Target = TS:GetTarget(spells.Q.Range)
 	if TS:IsValidTarget(Target) then
@@ -346,44 +341,41 @@ function Zilean.Combo()
 			if Menu.Get("Combo.UseE") and spells.E:IsReady() then
 				if Target.ServerPos:Distance(Player) then
 					if Utils.CastWithBuffer(spells.E, {Target}) then
-						aaaaaaaaaaaaammm = Game.GetTime() + 0.3
 						return
 					end
 				end
 			end
-			if aaaaaaaaaaaaammm - Game.GetTime() < 0 then
-				if Menu.Get("Combo.UseQ") and spells.Q:IsReady() then
-					if Utils.SpellLocked() and Target.ServerPos:Distance(Player) <= spells.Q.Range then
-						local Prediction = spells.Q:GetPrediction(Target)
-						if Prediction and Prediction.HitChanceEnum >= Menu.Get("Chance.Q1") then
-							if Utils.CastWithBuffer(spells.Q, {Prediction.CastPosition}) then
-								return
-							end
+			if Menu.Get("Combo.UseQ") and spells.Q:IsReady() then
+				if Utils.SpellLocked() and Target.ServerPos:Distance(Player) <= spells.Q.Range then
+					local Prediction = spells.Q:GetPrediction(Target)
+					if Prediction and Prediction.HitChanceEnum >= Menu.Get("Chance.Q1") then
+						if Utils.CastWithBuffer(spells.Q, {Prediction.CastPosition}) then
+							return
 						end
 					end
 				end
-				if Menu.Get("Combo.UseW") and Menu.Get("Combo.UseQ") then
-					if Menu.Get("Combo.whit")  then
-						if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
-							if Target.ServerPos:Distance(Player) <= spells.Q.Range then
-								if Target:GetBuff("zileanqenemybomb") then
-									local Prediction = spells.Q:GetPrediction(Target)
-									if Prediction then
-										if spells.W:Cast() then
-											return
-										end
-									end
-								end
-							end
-						end
-					else
-						if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
-							if Target.ServerPos:Distance(Player) <= spells.Q.Range then
+			end
+			if Menu.Get("Combo.UseW") and Menu.Get("Combo.UseQ") then
+				if Menu.Get("Combo.whit")  then
+					if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+						if Target.ServerPos:Distance(Player) <= spells.Q.Range then
+							if Target:GetBuff("zileanqenemybomb") then
 								local Prediction = spells.Q:GetPrediction(Target)
 								if Prediction then
 									if spells.W:Cast() then
 										return
 									end
+								end
+							end
+						end
+					end
+				else
+					if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+						if Target.ServerPos:Distance(Player) <= spells.Q.Range then
+							local Prediction = spells.Q:GetPrediction(Target)
+							if Prediction then
+								if spells.W:Cast() then
+									return
 								end
 							end
 						end
