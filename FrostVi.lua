@@ -11,6 +11,7 @@ local EventManager = SDK.EventManager
 local Geometry = SDK.Geometry
 local Renderer = SDK.Renderer
 local Enums = SDK.Enums
+local Game = SDK.Game
 local Input = SDK.Input
 
 local Menu = Libs.NewMenu
@@ -49,6 +50,10 @@ local spells = {
 }
 
 --//Library-//--
+function Utils.IsGameAvailable()
+    return not (Game.IsChatOpen() or Game.IsMinimized() or Player.IsDead)
+end
+
 local summSlots = {Enums.SpellSlots.Summoner1, Enums.SpellSlots.Summoner2}
 function Utils.GetSpellSlot(Name)
     for _, slot in ipairs(summSlots) do
@@ -98,47 +103,46 @@ end
 
 function Vi.LoadMenu()
 	Menu.RegisterMenu("FrostVi", "Frost Vi", function ()
-		Menu.ColumnLayout("cols", "cols", 5, true, function()
-            Menu.ColoredText("Combo", 0x9400D3, true)
-            Menu.Checkbox("Combo.UseQ", "Use Q", true) 
+		Menu.NewTree("Vi.comboMenu", "Combo", function()
+			Menu.Checkbox("Combo.UseQ", "Use Q", true) 
 			Menu.Dropdown("Combo.QMode", "Q Mode", 0, {"Logic", "MaxRange"})
 			Menu.Slider("Chance.Q","HitChance [Q]", 0.75, 0, 1, 0.05)
-            Menu.Checkbox("Combo.UseE", "Use E", true)  
-            Menu.Checkbox("Combo.UseR", "Use R", true)
+			Menu.Checkbox("Combo.UseE", "Use E", true)  
+			Menu.Checkbox("Combo.UseR", "Use R", true)
 			Menu.Dropdown("Combo.RMode", "R Mode", 0, {"Killable", "Always"})
 			--Menu.Keybind("Combo.Flash", "Flash Q", string.byte("G"), false, false, true)
-			
-			Menu.NextColumn()
-			
-			Menu.ColoredText("Harass", 0x9400D3, true)
-            Menu.Checkbox("Harass.UseQ", "Use Q", true)
-            Menu.Checkbox("Harass.UseE", "Use E", true)
-			
-			Menu.NextColumn()
-			
-			Menu.ColoredText("Clear", 0x9400D3, true)
-            Menu.Checkbox("Clear.UseQ", "Use Q", true)
-            Menu.Checkbox("Clear.UseE", "Use E", true)
-            Menu.Checkbox("JClear.UseQ", "Use Q Jungle", true)
-            Menu.Checkbox("JClear.UseE", "Use E Jungle", true)
+		end)	
+		Menu.Separator()
+		
+		Menu.NewTree("Vi.harassMenu", "Harass", function()
+			Menu.Checkbox("Harass.UseQ", "Use Q", true)
+			Menu.Checkbox("Harass.UseE", "Use E", true)
+		end)
+		Menu.Separator()
+		
+		Menu.NewTree("Vi.clearMenu", "Clear", function()
+			Menu.Checkbox("Clear.UseQ", "Use Q", true)
+			Menu.Checkbox("Clear.UseE", "Use E", true)
+			Menu.Checkbox("JClear.UseQ", "Use Q Jungle", true)
+			Menu.Checkbox("JClear.UseE", "Use E Jungle", true)
 			Menu.Checkbox("Clear.enemiesAround", "Don't clear if enemies around", true)
 			Menu.Slider("Clear.ManaSlider", "Don't Clear if Mana < %", 50, 1, 100, 1)
-			
-			Menu.NextColumn()
-			
-			Menu.ColoredText("Misc", 0x9400D3, true)
-            Menu.Checkbox("Misc.AntiGapCloser", "Use AntiGapCloser", true)
-            Menu.Checkbox("Misc.Interrupt", "Use Interrupt", true)	
+		end)
+		Menu.Separator()
+		
+		Menu.NewTree("Vi.miscMenu", "Misc", function()
+			Menu.Checkbox("Misc.AntiGapCloser", "Use AntiGapCloser", true)
+			Menu.Checkbox("Misc.Interrupt", "Use Interrupt", true)	
 			Menu.Keybind("Misc.SkillsUT", "Use Skills Under Turret", string.byte("T"), true, false, true)
-			
-			Menu.NextColumn()
-			
-			Menu.ColoredText("Drawing", 0x9400D3, true)
-            Menu.Checkbox("Drawing.Q", "Draw Q", true)
+		end)
+		Menu.Separator()
+		
+		Menu.NewTree("Vi.drawingMenu", "Draw Settings", function()
+			Menu.Checkbox("Drawing.Q", "Draw Q", true)
 			Menu.Indent(function()
 				Menu.ColorPicker("Drawing.QColor", "Color", 0xFF0000FF)
 			end)
-            Menu.Checkbox("Drawing.E", "Draw E", true)
+			Menu.Checkbox("Drawing.E", "Draw E", true)
 			Menu.Indent(function()
 				Menu.ColorPicker("Drawing.EColor", "Color", 0xFF0000FF)
 			end)
@@ -234,9 +238,8 @@ function Vi.Combo()
 	if TS:IsValidTarget(Target) and ((Menu.Get("Misc.SkillsUT") or Orbwalker.HasTurretTargetting(Player) and Utils.IsPosUnderTurret(Player.ServerPos)) or not Utils.IsPosUnderTurret(Target.ServerPos) ) then
 		if Menu.Get("Combo.UseQ", true) and spells.Q:IsReady() then
 			if spells.Q.IsCharging then
-				local Prediction = spells.Q:GetPrediction(Target)
 				if spells.Q:GetRange() == spells.Q.MaxRange or Menu.Get("Combo.QMode") == 0 and Orbwalker.GetTrueAutoAttackRange(Player) >= Player:Distance(Target) then
-					if Prediction and spells.Q:ReleaseOnHitChance(Prediction.CastPosition, Menu.Get("Chance.Q")) then
+					if spells.Q:ReleaseOnHitChance(spells.Q:GetBestLinearCastPos({Target}), Menu.Get("Chance.Q")) then
 						return
 					end
 				end
@@ -253,8 +256,9 @@ function Vi.Combo()
 			if Menu.Get("Combo.RMode") == 0 then
 				for _,enemy in ipairs(RTargets) do
 					if Vi.ComboDamage(enemy) > enemy.Health then
-						spells.R:Cast(enemy)
-						break
+						if spells.R:Cast(enemy) then
+							return
+						end
 					end
 				end
 			else
@@ -269,9 +273,13 @@ function Vi.Harass()
 	if TS:IsValidTarget(Target) then
 		if Menu.Get("Harass.UseQ", true) and spells.Q:IsReady() then
 			if spells.Q.IsCharging then
-				spells.Q:Release(Target)
+				if spells.Q:Release(Target) then
+					return
+				end
 			else
-				spells.Q:StartCharging()
+				if spells.Q:StartCharging() then
+					return
+				end
 			end
 		end
 
@@ -303,7 +311,7 @@ function Vi.LaneClear()
 					if not spells.Q.IsCharging then
 						spells.Q:StartCharging()
 					else
-						spells.Q:Release(bestPos)			
+						spells.Q:Release(bestPos)
 					end
 				end
 			end
@@ -328,7 +336,7 @@ function Vi.JungleClear()
 					if not spells.Q.IsCharging then
 						spells.Q:StartCharging()
 					else
-						spells.Q:Release(bestPos)			
+						spells.Q:Release(bestPos)					
 					end
 				end
 			end
@@ -337,6 +345,10 @@ function Vi.JungleClear()
 end
 
 function Vi.OnUpdate() 
+	if not Utils.IsGameAvailable() then
+		return
+	end
+
     local OrbwalkerState = Orbwalker.GetMode()
     if OrbwalkerState == "Combo" then
         Vi.Combo()  
