@@ -45,10 +45,18 @@ local adcTable = {
 local spells = {
     Q = Spell.Skillshot({
         Slot = Enums.SpellSlots.Q,
-        Delay = 0.75,
+        Delay = 0.25,
         Speed = math.huge,
         Range = 900,
-        Radius = 130,
+		Radius = 0,
+        Type = "Circular"
+    }),
+	QFarm = Spell.Skillshot({
+        Slot = Enums.SpellSlots.Q,
+        Delay = 0.25,
+        Speed = math.huge,
+        Range = 900,
+		Radius = 130,
         Type = "Circular"
     }),
     W = Spell.Active({
@@ -167,7 +175,6 @@ function Zilean.LoadMenu()
 	Menu.RegisterMenu("FrostZilean", "Frost Zilean", function ()
 		Menu.NewTree("Zilean.comboMenu", "Combo", function()
             Menu.Checkbox("Combo.UseQ", "Use Q", true)
-			Menu.Dropdown("Chance.Q1", "[Q] HitChance", Enums.HitChance.Low, { "Collision", "OutOfRange", "VeryLow", "Low", "Medium", "High", "VeryHigh", "Dashing", "Immobile" })
             Menu.Checkbox("Combo.UseW", "Use W for Q Reset", true)
 			Menu.Checkbox("Combo.whit", "Use W Only if Q Hits", false)
             Menu.Checkbox("Combo.UseE", "Use E", true)
@@ -189,7 +196,25 @@ function Zilean.LoadMenu()
             Menu.Checkbox("Harass.UseQ", "Use Q", true)
             Menu.Checkbox("Harass.UseW", "Use W for Q Reset", true)
 			Menu.Checkbox("Harass.whit", "Use W Only if Q Hits", false)
-			Menu.Checkbox("Harass.UseE", "Use E", true)	
+			Menu.Checkbox("Harass.UseE", "Use E", true)
+			Menu.Slider("Harass.ManaSlider", "Don't Harass if Mana < %", 50, 1, 100, 1)
+		end)
+		Menu.Separator()
+		
+		Menu.NewTree("Zilean.clearMenu", "Clear", function()
+			Menu.NewTree("Zilean.waveclearMenu", "WaveClear", function()
+				Menu.Checkbox("Clear.UseQ", "Use Q", true)
+				Menu.Checkbox("Clear.UseW", "Use W for Q Reset", true)
+				Menu.Checkbox("Clear.enemiesAround", "Don't clear if enemies around", true)
+				Menu.Slider("Clear.xMinions", "if X Minions", 3, 1, 6, 1)
+				Menu.Slider("Clear.ManaSlider", "Don't Clear if Mana < %", 50, 1, 100, 1)
+			end)
+			Menu.NewTree("Zilean.jungleclearMenu", "JungleClear", function()
+				Menu.Checkbox("JClear.UseQ", "Use Q", true)
+				Menu.Checkbox("JClear.UseW", "Use W for Q Reset", true)
+				Menu.Slider("JClear.xMinions", "if X Minions", 2, 1, 6, 1)
+				Menu.Slider("JClear.ManaSlider", "Don't Clear if Mana < %", 50, 1, 100, 1)
+			end)
 		end)
 		Menu.Separator()
 		
@@ -242,7 +267,21 @@ function Zilean.LoadMenu()
 			Menu.Checkbox("Flee.fleew", " Use W for E Reset", false)		
 		end)
 		Menu.Separator()
+		
+        Menu.NewTree("Zilean.hcMenu", "Prediction", function()
+			Menu.Text("Combo")
+			Menu.Dropdown("Chance.Q1", "[Q] HitChance", Enums.HitChance.Low, { "Collision", "OutOfRange", "VeryLow", "Low", "Medium", "High", "VeryHigh", "Dashing", "Immobile" })
+			Menu.Text("Harass")
+			Menu.Dropdown("Chance.QH", "[Q] HitChance", Enums.HitChance.Low, { "Collision", "OutOfRange", "VeryLow", "Low", "Medium", "High", "VeryHigh", "Dashing", "Immobile" })
+        end)
+		Menu.Separator()
 	end)
+end
+
+function Zilean.EnemiesNearby()
+    if Menu.Get("Clear.enemiesAround") and TS:GetTarget(1800) then
+        return TS:GetTarget(1800)
+    end
 end
 
 function Zilean.PrioritizedAllyWE()
@@ -432,30 +471,43 @@ function Zilean.Combo()
 end
 
 function Zilean.Harass()
-	local Target = TS:GetTarget(spells.Q.Range)
-	if TS:IsValidTarget(Target) then
-		if Menu.Get("Harass.UseE") then
-			if Target.ServerPos:Distance(Player) <= spells.E.Range then
-				if Utils.CastWithBuffer(spells.E, {Target}) then
-					return
-				end
-			end
-		end
-		if Menu.Get("Harass.UseQ") then
-			if Utils.SpellLocked() and Target.ServerPos:Distance(Player) <= spells.Q.Range then
-				local Prediction = spells.Q:GetPrediction(Target)
-				if Prediction and Prediction.HitChanceEnum >= Enums.HitChance.Low then
-					if Utils.CastWithBuffer(spells.Q, {Prediction.CastPosition}) then
+	if Player.ManaPercent * 100 > Menu.Get("Harass.ManaSlider") then
+		local Target = TS:GetTarget(spells.Q.Range)
+		if TS:IsValidTarget(Target) then
+			if Menu.Get("Harass.UseE") then
+				if Target.ServerPos:Distance(Player) <= spells.E.Range then
+					if Utils.CastWithBuffer(spells.E, {Target}) then
 						return
 					end
 				end
 			end
-		end
-		if Menu.Get("Harass.UseW") then
-			if Menu.Get("Harass.whit") then
-				if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
-					if Target.ServerPos:Distance(Player) <= spells.Q.Range then
-						if Target:GetBuff("zileanqenemybomb") then
+			if Menu.Get("Harass.UseQ") then
+				if Utils.SpellLocked() and Target.ServerPos:Distance(Player) <= spells.Q.Range then
+					local Prediction = spells.Q:GetPrediction(Target)
+					if Prediction and Prediction.HitChanceEnum >= Menu.Get("Chance.QH") then
+						if Utils.CastWithBuffer(spells.Q, {Prediction.CastPosition}) then
+							return
+						end
+					end
+				end
+			end
+			if Menu.Get("Harass.UseW") then
+				if Menu.Get("Harass.whit") then
+					if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+						if Target.ServerPos:Distance(Player) <= spells.Q.Range then
+							if Target:GetBuff("zileanqenemybomb") then
+								local Prediction = spells.Q:GetPrediction(Target)
+								if Prediction then
+									if spells.W:Cast() then
+										return
+									end
+								end
+							end
+						end
+					end
+				else
+					if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+						if Target.ServerPos:Distance(Player) <= spells.Q.Range then
 							local Prediction = spells.Q:GetPrediction(Target)
 							if Prediction then
 								if spells.W:Cast() then
@@ -463,27 +515,70 @@ function Zilean.Harass()
 								end
 							end
 						end
+					end			
+				end
+			end
+		end
+	end
+end
+
+function Zilean.Clear()
+	if Player.ManaPercent * 100 > Menu.Get("JClear.ManaSlider") then
+		if Menu.Get("JClear.UseQ") and spells.Q:IsReady() then
+			local Minions = ObjManager.Get("neutral", "minions")
+			local pos, n = spells.QFarm:GetBestCircularCastPos(Minions)
+			if Utils.SpellLocked() then
+				if n >= Menu.Get("JClear.xMinions") then
+					if Utils.CastWithBuffer(spells.Q, {pos}) then
+						return
 					end
 				end
-			else
-				if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
-					if Target.ServerPos:Distance(Player) <= spells.Q.Range then
-						local Prediction = spells.Q:GetPrediction(Target)
-						if Prediction then
-							if spells.W:Cast() then
-								return
-							end
-						end
-					end
-				end			
 			end
+		end
+		
+		if Menu.Get("JClear.UseQ") and Menu.Get("JClear.UseW") and spells.W:IsReady() then
+			if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+				local Minions = ObjManager.Get("neutral", "minions")
+				local pos, n = spells.QFarm:GetBestCircularCastPos(Minions)
+				if n >= Menu.Get("JClear.xMinions") then
+					if spells.W:Cast() then
+						return
+					end
+				end
+			end	
+		end
+	end
+
+	if not Zilean.EnemiesNearby() and Player.ManaPercent * 100 > Menu.Get("Clear.ManaSlider") then
+		if Menu.Get("Clear.UseQ") and spells.Q:IsReady() then
+			local Minions = ObjManager.Get("enemy", "minions")
+			local pos, n = spells.QFarm:GetBestCircularCastPos(Minions)
+			if Utils.SpellLocked() then
+				if n >= Menu.Get("Clear.xMinions") then
+					if Utils.CastWithBuffer(spells.Q, {pos}) then
+						return
+					end
+				end
+			end
+		end
+		
+		if Menu.Get("Clear.UseQ") and Menu.Get("Clear.UseW") and spells.W:IsReady() then
+			if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
+				local Minions = ObjManager.Get("enemy", "minions")
+				local pos, n = spells.QFarm:GetBestCircularCastPos(Minions)
+				if n >= Menu.Get("Clear.xMinions") then
+					if spells.W:Cast() then
+						return
+					end
+				end
+			end	
 		end
 	end
 end
 
 function Zilean.OnSpellCast(obj, spellcast)
     if spellcast.Source == Player and (spellcast.Slot == 0 or spellcast.Slot == 2 or spellcast.Slot == 3) then
-		Spell_Buffers[spellcast.Name] = Game.GetTime() + spellcast.CastDelay + (Game.GetLatency() / 100) -- Added To buffer
+		Spell_Buffers[spellcast.Name] = Game.GetTime() + spellcast.CastDelay + (Game.GetLatency() / 1000) -- Added To buffer
     end
 end
 
@@ -497,11 +592,9 @@ function Zilean.OnUpdate()
 
 	if Menu.Get("qwq") then
 		local MousePos = Renderer.GetMousePos()
-		if Utils.SpellLocked() then
-			if spells.Q:IsReady() and Player.ServerPos:Distance(MousePos) < spells.Q.Range then
-				if Utils.CastWithBuffer(spells.Q, {MousePos}) then
-					return
-				end
+		if spells.Q:IsReady() and Player.ServerPos:Distance(MousePos) < spells.Q.Range then
+			if Utils.CastWithBuffer(spells.Q, {MousePos}) then
+				return
 			end
 		end
 		if not spells.Q:IsReady() and Player.Mana > spells.Q:GetManaCost() + spells.W:GetManaCost() then
@@ -563,10 +656,16 @@ function Zilean.OnUpdate()
         Zilean.Combo()  
     elseif OrbwalkerState == "Harass" then
         Zilean.Harass()
+	elseif OrbwalkerState == "Waveclear" then
+		Zilean.Clear()
     end
 end
 
 function Zilean.OnDraw()
+	if Player.IsOnScreen == false then
+		return
+	end
+	
     if (Menu.Get("Drawing.AlwaysDraw") or spells.Q:IsReady()) and Menu.Get("Drawing.Q") then
         Renderer.DrawCircle3D(Player.Position, spells.Q.Range, 30, 1, Menu.Get("Drawing.QColor"))
     end
