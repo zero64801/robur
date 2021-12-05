@@ -17,6 +17,7 @@ local Orbwalker = Libs.Orbwalker
 local HPPred = Libs.HealthPred
 local Spell = Libs.Spell
 
+
 local adcTable = { 
 ["Twitch"] = true, 
 ["Aphelios"] = true, 
@@ -46,9 +47,9 @@ local spells = {
     Q = Spell.Skillshot({
         Slot = Enums.SpellSlots.Q,
         Delay = 0.25,
-        Speed = math.huge,
+        Speed = 0,
         Range = 900,
-		Radius = 0,
+		Radius = 145,
         Type = "Circular"
     }),
 	QFarm = Spell.Skillshot({
@@ -343,9 +344,9 @@ function Zilean.AutoUlt()
 	if spells.R:IsReady() and Menu.Get("autor") then
         local Allies = ObjManager.Get("ally", "heroes")
         for i, ally in pairs(Allies) do
-			if ally ~= Player and not Menu.Get("whitelist" .. ally.CharName) then
+			if ally ~= Player and not Menu.Get("whitelist" .. ally.CharName)  then
 				local HealthPred = HPPred.GetHealthPrediction(ally, 2, true)
-				if (HealthPred / ally.MaxHealth) * 100 <= Menu.Get("rhp") and Utils.CountHeroesInRange("enemy", Player.ServerPos, 900) > 0 and ally.ServerPos:Distance(Player) <= spells.R.Range then
+				if (HealthPred / ally.MaxHealth) * 100 <= Menu.Get("rhp") and Utils.CountHeroesInRange("enemy", Player.ServerPos, 900) > 0 and ally.ServerPos:Distance(Player) <= spells.R.Range and spells.R.CanCast(spells.R,ally) then
 					if Utils.CastWithBuffer(spells.R, {ally}) then
 						return
 					end
@@ -355,7 +356,7 @@ function Zilean.AutoUlt()
 		if spells.R:IsReady() then
 			if not Menu.Get("whitelist" .. Player.CharName) then
 				local HealthPred = HPPred.GetHealthPrediction(Player, 2, true)
-				if (HealthPred / Player.MaxHealth) * 100 <= Menu.Get("rhp") and Utils.CountHeroesInRange("enemy", Player.ServerPos, 650) > 0 then
+				if (HealthPred / Player.MaxHealth) * 100 <= Menu.Get("rhp") and Utils.CountHeroesInRange("enemy", Player.ServerPos, 650) > 0 and spells.R.CanCast(spells.R,Player) then
 					if Utils.CastWithBuffer(spells.R, {Player}) then
 						return
 					end
@@ -367,7 +368,7 @@ end
 
 function Zilean.OnGapclose(source, dashInstance)
 	if spells.E:IsReady() and Menu.Get("Misc.AntiGapCloser", true) then
-		if source.IsEnemy and not Menu.Get("blacklist" .. source.CharName) and Player.ServerPos:Distance(source) < spells.E.Range then
+		if source.IsEnemy and not Menu.Get("blacklist" .. source.CharName) and spells.E.CanCast(spells.E,source) and Player.ServerPos:Distance(source) < spells.E.Range then
 			Utils.CastWithBuffer(spells.E, {source})
 		end
 	end
@@ -379,7 +380,7 @@ function Zilean.Combo()
 		if Menu.Get("Combo.prioritye") then
 			if Menu.Get("Combo.UseE") and spells.E:IsReady() then
 				if Target.ServerPos:Distance(Player) then
-					if Utils.CastWithBuffer(spells.E, {Target}) then
+					if spells.E.CanCast(spells.E,Target) and Utils.CastWithBuffer(spells.E, {Target}) then
 						return
 					end
 				end
@@ -424,7 +425,7 @@ function Zilean.Combo()
 		else
 			if Menu.Get("Combo.UseE") and spells.E:IsReady() then
 				if Target.ServerPos:Distance(Player) <= spells.E.Range then
-					if Utils.CastWithBuffer(spells.E, {Target}) then
+					if spells.E.CanCast(spells.E,Target) and Utils.CastWithBuffer(spells.E, {Target}) then
 						return
 					end
 				end
@@ -476,7 +477,7 @@ function Zilean.Harass()
 		if TS:IsValidTarget(Target) then
 			if Menu.Get("Harass.UseE") then
 				if Target.ServerPos:Distance(Player) <= spells.E.Range then
-					if Utils.CastWithBuffer(spells.E, {Target}) then
+					if spells.E.CanCast(spells.E,Target) and Utils.CastWithBuffer(spells.E, {Target}) then
 						return
 					end
 				end
@@ -581,6 +582,11 @@ function Zilean.OnSpellCast(obj, spellcast)
 		Spell_Buffers[spellcast.Name] = Game.GetTime() + spellcast.CastDelay + (Game.GetLatency() / 1000) -- Added To buffer
     end
 end
+local tickpath = Game.GetTime()
+
+function Zilean.OnNewPath(obj, pathing)
+ -- soon
+end
 
 function Zilean.OnUpdate()
 	if not Utils.IsGameAvailable() then
@@ -606,7 +612,7 @@ function Zilean.OnUpdate()
 
 	if Menu.Get("Misc.autoe") and spells.E:IsReady() then
 		for i, ally in ipairs(ObjManager.GetNearby("ally", "heroes")) do
-			if Utils.HasBuffOfType(ally, Enums.BuffTypes.Slow) and ally.ServerPos:Distance(Player.ServerPos) <= spells.E.Range then
+			if spells.E.CanCast(spells.E,ally) and Utils.HasBuffOfType(ally, Enums.BuffTypes.Slow) and ally.ServerPos:Distance(Player.ServerPos) <= spells.E.Range then
 				if Utils.CastWithBuffer(spells.E, {ally}) then
 					return
 				end				
@@ -631,7 +637,7 @@ function Zilean.OnUpdate()
 	
 	if Menu.Get("Flee.fleekey") then
 		Orbwalker.Orbwalk(Renderer.GetMousePos(), nil)
-		if Utils.CastWithBuffer(spells.E, {Player}) then
+		if spells.E.CanCast(spells.E,Player) and Utils.CastWithBuffer(spells.E, {Player}) then
 			fleetimeout = Game.GetTime() + 0.5
 			return
 		end
@@ -645,7 +651,7 @@ function Zilean.OnUpdate()
 	if Menu.Get("wekey") then
 		local Ally = Zilean.PrioritizedAllyWE()
 		if Ally then
-			if Utils.CastWithBuffer(spells.E, {Ally}) then
+			if spells.E.CanCast(spells.E,ally) and Utils.CastWithBuffer(spells.E, {Ally}) then
 				return
 			end
 		end
